@@ -1,0 +1,57 @@
+name: Build
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        arch: [arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PDFium
+        run: |
+          sudo mkdir -p /usr/local/lib
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            wget https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-arm64.tgz -O /tmp/pdfium.tgz
+            tar xzf /tmp/pdfium.tgz -C /tmp
+            sudo cp /tmp/lib/libpdfium.so /usr/local/lib/
+            sudo chmod +x /usr/local/lib/libpdfium.so
+            sudo ldconfig
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            wget https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-mac-arm64.tgz -O /tmp/pdfium.tgz
+            tar xzf /tmp/pdfium.tgz -C /tmp
+            sudo cp /tmp/lib/libpdfium.dylib /usr/local/lib/
+            sudo chmod +x /usr/local/lib/libpdfium.dylib
+          fi
+          rm -rf /tmp/pdfium.tgz /tmp/lib
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install maturin
+        run: pip install maturin
+      - name: Build with maturin
+        run: maturin build --release
+      - name: Set platform tag
+        id: platform
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            echo "platform=linux_aarch64" >> $GITHUB_OUTPUT
+          else
+            echo "platform=macosx_arm64" >> $GITHUB_OUTPUT
+          fi
+      - name: Get Pkg version from Cargo.toml
+        id: cargo
+        run: |
+          VERSION=$(grep '^version = ' Cargo.toml | cut -d '"' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: preprocess-${{ steps.cargo.outputs.version }}-cp311-cp311-${{ steps.platform.outputs.platform }}.whl
+          path: target/wheels/*.whl

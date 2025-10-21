@@ -1,0 +1,16 @@
+[package]
+name = "preprocess"
+version = "0.0.1"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.21", features = ["extension-module"] }
+pdfium-render = "0.8.31"
+image = "0.25"
+numpy = "0.21.0"
+
+[package.metadata.maturin]
+name = "preprocess"
