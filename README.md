@@ -7,6 +7,6 @@ maturin build --release -m  Cargo.toml
 
  After building, install the wheel file in your Python environment:
 ```
-cd polar-server
-uv pip install polar-preprocess/target/wheels/xxx.whl
+cd rust_pdf_to_img
+uv pip install preprocess/target/wheels/xxx.whl
  ```
