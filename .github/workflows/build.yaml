@@ -10,25 +10,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Build wheel inside manylinux_2_31 Docker container
-      - name: Build rust_pdf2img wheel (manylinux_2_31)
+      # Copy source code into temporary directory for Docker mount
+      - name: Prepare build directory
         run: |
-          # Copy source code into temporary directory for Docker mount
           mkdir -p /tmp/build
           rsync -av --exclude target ./rust_pdf2img /tmp/build/rust_pdf2img
 
-          # Run manylinux_2_31 container
+      # Build rust_pdf2img wheel inside manylinux_2_31 container
+      - name: Build rust_pdf2img wheel (manylinux_2_31)
+        run: |
           docker run --rm -v /tmp/build:/io quay.io/pypa/manylinux_2_31_x86_64 \
             bash -c "\
               yum install -y python3 python3-pip make gcc gcc-c++ unzip wget && \
               python3 -m pip install --upgrade pip maturin && \
-              cd /io/rust_pdf2img && \
-              maturin build --release --compatibility manylinux_2_31 \
+              # Install PDFium x64
+              mkdir -p /usr/local/lib && \
+              wget -O /tmp/pdfium.tgz https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz && \
+              tar xzf /tmp/pdfium.tgz -C /tmp && \
+              cp /tmp/lib/libpdfium.so /usr/local/lib/ && chmod 755 /usr/local/lib/libpdfium.so && ldconfig /usr/local/lib && rm -rf /tmp/pdfium.tgz /tmp/lib && \
+              # Build wheel
+              cd /io/rust_pdf2img && maturin build --release --compatibility manylinux_2_31 \
             "
 
+      # Upload wheel artifact
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
           name: rust_pdf2img-wheel
-          path: rust_pdf2img/target/wheels/*.whl
+          path: /tmp/build/rust_pdf2img/target/wheels/*.whl
           retention-days: 7
