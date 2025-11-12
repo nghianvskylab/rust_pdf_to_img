@@ -1,4 +1,4 @@
-name: Build rust_pdf2img wheel
+name: Build rust_pdf_to_img wheel
 
 on:
   pull_request:
@@ -10,44 +10,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Prepare source code for Docker
-      - name: Prepare build directory
+      # Build wheel inside manylinux_2_31 Docker container
+      - name: Build rust_pdf_to_img wheel (manylinux_2_31)
         run: |
+          # Copy source code into temporary directory for Docker mount
           mkdir -p /tmp/build
-          rsync -av --exclude target ./rust_pdf2img /tmp/build/rust_pdf2img
+          rsync -av --exclude target ./rust_pdf_to_img /tmp/build/rust_pdf_to_img
 
-      # Build wheel inside manylinux_2_31 x86_64 container
-      - name: Build rust_pdf2img wheel (manylinux_2_31)
-        run: |
+          # Run manylinux_2_31 container
           docker run --rm -v /tmp/build:/io quay.io/pypa/manylinux_2_31_x86_64 \
             bash -c "\
               yum install -y python3 python3-pip make gcc gcc-c++ unzip wget && \
               python3 -m pip install --upgrade pip maturin && \
-              # Install PDFium x64
-              mkdir -p /usr/local/lib && \
-              wget -O /tmp/pdfium.tgz https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz && \
-              tar xzf /tmp/pdfium.tgz -C /tmp && \
-              cp /tmp/lib/libpdfium.so /usr/local/lib/ && chmod 755 /usr/local/lib/libpdfium.so && ldconfig /usr/local/lib && rm -rf /tmp/pdfium.tgz /tmp/lib && \
-              # Build wheel
-              cd /io/rust_pdf2img && maturin build --release --compatibility manylinux_2_31 \
+              cd /io/rust_pdf_to_img && \
+              maturin build --release --compatibility manylinux_2_31 \
             "
 
-      # Set platform tag
-      - name: Set platform tag
-        id: platform
-        run: echo "platform=linux_x86_64" >> $GITHUB_OUTPUT
-
-      # Get version from Cargo.toml
-      - name: Get version
-        id: cargo
-        run: |
-          VERSION=$(grep '^version = ' rust_pdf2img/Cargo.toml | cut -d '"' -f2)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      # Upload wheel artifact
-      - name: Upload wheel
+      - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rust_pdf2img-${{ steps.cargo.outputs.version }}-cp310-cp310-${{ steps.platform.outputs.platform }}.whl
-          path: /tmp/build/rust_pdf2img/target/wheels/*.whl
+          name: rust_pdf_to_img-wheel
+          path: rust_pdf_to_img/target/wheels/*.whl
           retention-days: 7
