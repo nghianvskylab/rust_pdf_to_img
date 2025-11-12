@@ -1,8 +1,8 @@
 name: Build rust_pdf2img wheel
 
 on:
-  workflow_dispatch:
-  workflow_call:
+  pull_request:
+    branches: [main]
 
 jobs:
   build:
