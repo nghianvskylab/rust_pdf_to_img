@@ -34,7 +34,7 @@ jobs:
           rm -rf /tmp/pdfium.tgz /tmp/lib
 
       - name: Build rust_pdf2img wheel (manylinux 2_31)
-        working-directory: rust_pdf2img
+        working-directory: rust_pdf_to_img
         run: maturin build --release --manylinux 2_31
 
       - name: Upload wheel artifact
