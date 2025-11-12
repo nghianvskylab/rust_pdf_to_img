@@ -15,7 +15,7 @@ jobs:
         run: |
           sudo mkdir -p /usr/local/lib
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            wget https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-arm64.tgz -O /tmp/pdfium.tgz
+            wget https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x86.tgz -O /tmp/pdfium.tgz
             tar xzf /tmp/pdfium.tgz -C /tmp
             sudo cp /tmp/lib/libpdfium.so /usr/local/lib/
             sudo chmod +x /usr/local/lib/libpdfium.so
