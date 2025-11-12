@@ -10,13 +10,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Prepare temporary directory for Docker mount
+      # Prepare source code for Docker
       - name: Prepare build directory
         run: |
           mkdir -p /tmp/build
           rsync -av --exclude target ./rust_pdf2img /tmp/build/rust_pdf2img
 
-      # Build rust_pdf2img wheel inside manylinux_2_31 container
+      # Build wheel inside manylinux_2_31 x86_64 container
       - name: Build rust_pdf2img wheel (manylinux_2_31)
         run: |
           docker run --rm -v /tmp/build:/io quay.io/pypa/manylinux_2_31_x86_64 \
@@ -32,14 +32,13 @@ jobs:
               cd /io/rust_pdf2img && maturin build --release --compatibility manylinux_2_31 \
             "
 
-      # Set platform tag for artifact name
+      # Set platform tag
       - name: Set platform tag
         id: platform
-        run: |
-          echo "platform=linux_x86_64" >> $GITHUB_OUTPUT
+        run: echo "platform=linux_x86_64" >> $GITHUB_OUTPUT
 
       # Get version from Cargo.toml
-      - name: Get version from Cargo.toml
+      - name: Get version
         id: cargo
         run: |
           VERSION=$(grep '^version = ' rust_pdf2img/Cargo.toml | cut -d '"' -f2)
