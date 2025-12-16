@@ -23,11 +23,20 @@ fn load_pdf<'a>(pdfium: &'a Pdfium, py_pdf_bytes: &'a [u8]) -> PyResult<PdfDocum
 
 fn render_page(
     page: &PdfPage,
-    dpi: i32,
-) -> Result<(Vec<u16>, usize, usize), Box<dyn std::error::Error>> {
+    dpi: i16,
+) -> Result<(Vec<u8>, usize, usize), Box<dyn std::error::Error>> {
+    // PDF page size is in points (1 point = 1/72 inch)
+    // => pixels = points * (dpi / 72)
+    let page_width_points = page.width().value;
+    let page_height_points = page.height().value;
+
+    let target_width_px = (page_width_points * dpi as f32 / 72.0).round() as u32;
+    let target_height_px = (page_height_points * dpi as f32 / 72.0).round() as u32;
+
     let render = page.render_with_config(
         &PdfRenderConfig::new()
-            .set_target_width(dpi)
+            .set_target_width(target_width_px as i32)
+            .set_target_height(target_height_px as i32)
             .render_form_data(true),
     )?;
 
@@ -35,16 +44,14 @@ fn render_page(
     let width = image.width() as usize;
     let height = image.height() as usize;
 
-    if width == 1 && height == 1 {
-        return Err("Invalid image size 1x1".into());
+    if width <= 1 || height <= 1 {
+        return Err("Invalid rendered image size (too small)".into());
     }
 
     let rgb = image.to_rgb8();
     let bgr_bytes = rgb_to_bgr(&rgb.into_raw());
 
-    let bgr_u16: Vec<u16> = bgr_bytes.iter().map(|&x| (x as u16) * 257).collect();
-
-    Ok((bgr_u16, width, height))
+    Ok((bgr_bytes, width, height))
 }
 
 fn rgb_to_bgr(rgb: &[u8]) -> Vec<u8> {
@@ -55,14 +62,14 @@ fn rgb_to_bgr(rgb: &[u8]) -> Vec<u8> {
     bgr
 }
 
-fn page_to_pyarray(py: Python, page: &PdfPage) -> PyResult<Py<PyArray3<u16>>> {
-    let (bgr_u16, width, height) = render_page(page, 1200)
+fn page_to_pyarray(py: Python, page: &PdfPage, dpi: i16) -> PyResult<Py<PyArray3<u8>>> {
+    let (bgr_bytes, width, height) = render_page(page, dpi)
         .or_else(|_| render_page(page, 100))
         .map_err(|e| {
             pyo3::exceptions::PyRuntimeError::new_err(format!("Failed rendering page: {}", e))
         })?;
 
-    let array3d = Array3::from_shape_vec((height, width, 3), bgr_u16).map_err(|e| {
+    let array3d = Array3::from_shape_vec((height, width, 3), bgr_bytes).map_err(|e| {
         pyo3::exceptions::PyValueError::new_err(format!("Failed to create ndarray: {}", e))
     })?;
 
@@ -70,18 +77,18 @@ fn page_to_pyarray(py: Python, page: &PdfPage) -> PyResult<Py<PyArray3<u16>>> {
 }
 
 #[pyfunction]
-fn pdf2img(py: Python, py_pdf_bytes: &[u8]) -> PyResult<Py<PyArray3<u16>>> {
+fn pdf2img(py: Python, py_pdf_bytes: &[u8], dpi: i16) -> PyResult<Py<PyArray3<u8>>> {
     let pdfium = get_pdfium()?;
     let doc = load_pdf(&pdfium, py_pdf_bytes)?;
     let page = doc
         .pages()
         .get(0)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-    page_to_pyarray(py, &page)
+    page_to_pyarray(py, &page, dpi)
 }
 
 #[pyfunction]
-fn pdf2imgs(py: Python, py_pdf_bytes: &[u8]) -> PyResult<Vec<Py<PyArray3<u16>>>> {
+fn pdf2imgs(py: Python, py_pdf_bytes: &[u8], dpi: i16) -> PyResult<Vec<Py<PyArray3<u8>>>> {
     let pdfium = get_pdfium()?;
     let doc = load_pdf(&pdfium, py_pdf_bytes)?;
 
@@ -90,14 +97,14 @@ fn pdf2imgs(py: Python, py_pdf_bytes: &[u8]) -> PyResult<Vec<Py<PyArray3<u16>>>>
         let page = doc.pages().get(i).map_err(|e| {
             pyo3::exceptions::PyRuntimeError::new_err(format!("Page {} error: {}", i, e))
         })?;
-        results.push(page_to_pyarray(py, &page)?);
+        results.push(page_to_pyarray(py, &page, dpi)?);
     }
 
     Ok(results)
 }
 
 #[pymodule]
-fn preprocess<'py>(_py: Python<'py>, m: &PyModule) -> PyResult<()> {
+fn rust_pdf2img(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(pdf2img, m)?)?;
     m.add_function(wrap_pyfunction!(pdf2imgs, m)?)?;
     Ok(())
